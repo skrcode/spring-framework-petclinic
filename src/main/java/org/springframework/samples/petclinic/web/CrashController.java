@@ -33,6 +33,8 @@ public class CrashController {
     public String triggerException() {
         throw new RuntimeException("Expected: controller used to showcase what " +
             "happens when an exception is thrown");
+
+
     }
 
 
