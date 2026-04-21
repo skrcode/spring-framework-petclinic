@@ -39,6 +39,7 @@ public class VetController {
         this.clinicService = clinicService;
     }
 
+
     @GetMapping("/vets")
     public String showVetList(Map<String, Object> model) {
         // Here we are returning an object of type 'Vets' rather than a collection of Vet objects
