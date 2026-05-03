@@ -33,11 +33,15 @@ import java.util.Map;
 @Controller
 public class VetController {
 
+
+
+
     private final ClinicService clinicService;
 
     public VetController(ClinicService clinicService) {
         this.clinicService = clinicService;
     }
+
 
     @GetMapping("/vets")
     public String showVetList(Map<String, Object> model) {
