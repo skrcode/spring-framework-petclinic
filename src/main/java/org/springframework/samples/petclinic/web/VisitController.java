@@ -36,6 +36,7 @@ import org.springframework.web.bind.annotation.*;
 @Controller
 public class VisitController {
 
+
     private final ClinicService clinicService;
 
     public VisitController(ClinicService clinicService) {
