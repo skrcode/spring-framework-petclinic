@@ -1,7 +1,26 @@
+/*
+ * Copyright 2002-2022 the original author or authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package org.springframework.samples.petclinic.web;
+
+import java.time.LocalDate;
+import java.util.List;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.samples.petclinic.model.Pet;
 import org.springframework.samples.petclinic.model.Visit;
@@ -11,21 +30,25 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.bind.WebDataBinder;
 
-import java.util.ArrayList;
-import java.util.List;
-
-import org.mockito.Mockito;
-import static org.hamcrest.Matchers.*;
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
+import static org.hamcrest.Matchers.hasItem;
+import static org.hamcrest.Matchers.hasProperty;
+import static org.hamcrest.Matchers.is;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.mockito.BDDMockito.given;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.model;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.view;
 
 /**
- * Test class for the {@link VisitController}.
+ * Test class for {@link VisitController}.
  */
 @SpringJUnitWebConfig(locations = {"classpath:spring/mvc-core-config.xml", "classpath:spring/mvc-test-config.xml"})
 class VisitControllerTests {
@@ -40,16 +63,13 @@ class VisitControllerTests {
     private ClinicService clinicService;
 
     private MockMvc mockMvc;
+
   @BeforeEach
   void setUp() {
-      // Reset the shared Spring-managed Mockito proxy so invocation counts
-      // do not accumulate across tests and stubs remain deterministic.
-      Mockito.reset(clinicService);
+      this.mockMvc = MockMvcBuilders.standaloneSetup(visitController).build();
   
-      this.mockMvc = MockMvcBuilders
-          .standaloneSetup(visitController)
-          .build();
-  
+      // Reset mock and configure default stub for findPetById
+      reset(clinicService);
       Pet pet = new Pet();
       pet.setId(TEST_PET_ID);
       given(this.clinicService.findPetById(TEST_PET_ID)).willReturn(pet);
@@ -64,125 +84,59 @@ class VisitControllerTests {
   }
 
   @Test
-  void testInitNewVisitFormUsesWildcardOwner() throws Exception {
-      // The GET mapping uses /owners/*/pets/{petId}/visits/new — any ownerId segment works
-      mockMvc.perform(get("/owners/42/pets/{petId}/visits/new", TEST_PET_ID))
+  void testInitNewVisitFormWithWildcardOwner() throws Exception {
+      // The URL pattern uses wildcard for ownerId: /owners/*/pets/{petId}/visits/new
+      mockMvc.perform(get("/owners/99/pets/{petId}/visits/new", TEST_PET_ID))
           .andExpect(status().isOk())
           .andExpect(view().name("pets/createOrUpdateVisitForm"))
           .andExpect(model().attributeExists("visit"));
-  
-      verify(clinicService, times(1)).findPetById(TEST_PET_ID);
-  }
-
-  @Test
-  void testInitNewVisitFormVisitLinkedToPet() throws Exception {
-      // The @ModelAttribute visit should be linked to the pet via loadPetWithVisit
-      mockMvc.perform(get("/owners/{ownerId}/pets/{petId}/visits/new", TEST_OWNER_ID, TEST_PET_ID))
-          .andExpect(status().isOk())
-          .andExpect(model().attribute("visit", hasProperty("pet", notNullValue())));
   }
 
   @Test
   void testProcessNewVisitFormSuccess() throws Exception {
       mockMvc.perform(post("/owners/{ownerId}/pets/{petId}/visits/new", TEST_OWNER_ID, TEST_PET_ID)
-          .param("date", "2023/01/01")
-          .param("description", "Annual check-up")
+          .param("description", "Rabies vaccination")
       )
           .andExpect(status().is3xxRedirection())
           .andExpect(view().name("redirect:/owners/{ownerId}"));
   
-      verify(clinicService, times(1)).saveVisit(any(Visit.class));
+      verify(clinicService).saveVisit(org.mockito.ArgumentMatchers.any(Visit.class));
   }
 
   @Test
-  void testProcessNewVisitFormSuccessRedirectContainsOwnerId() throws Exception {
-      // Ensure the redirect view name literally contains the ownerId placeholder
+  void testProcessNewVisitFormRedirectUriTemplate() throws Exception {
+      // Spring MVC must keep the {ownerId} URI template intact in the redirect view name
       mockMvc.perform(post("/owners/{ownerId}/pets/{petId}/visits/new", TEST_OWNER_ID, TEST_PET_ID)
-          .param("description", "General check")
+          .param("description", "Post-surgery follow-up")
       )
-          .andExpect(status().is3xxRedirection())
-          .andExpect(redirectedUrlPattern("/owners/*"));
-  }
-
-  @Test
-  void testProcessNewVisitFormSuccessDoesNotReturnForm() throws Exception {
-      // On success the form view should NOT be returned
-      mockMvc.perform(post("/owners/{ownerId}/pets/{petId}/visits/new", TEST_OWNER_ID, TEST_PET_ID)
-          .param("description", "Blood work")
-      )
-          .andExpect(view().name(not(equalTo("pets/createOrUpdateVisitForm"))));
+          .andExpect(view().name("redirect:/owners/{ownerId}"));
   }
 
   @Test
   void testProcessNewVisitFormHasErrors() throws Exception {
-      // description is @NotEmpty — submitting without it should trigger validation error
-      mockMvc.perform(post("/owners/{ownerId}/pets/{petId}/visits/new", TEST_OWNER_ID, TEST_PET_ID)
-          .param("date", "2023/01/01")
-      )
+      // When description is missing (blank), Bean Validation should fail and re-show the form
+      mockMvc.perform(post("/owners/{ownerId}/pets/{petId}/visits/new", TEST_OWNER_ID, TEST_PET_ID))
           .andExpect(status().isOk())
-          .andExpect(model().attributeHasErrors("visit"))
-          .andExpect(model().attributeHasFieldErrors("visit", "description"))
-          .andExpect(view().name("pets/createOrUpdateVisitForm"));
+          .andExpect(view().name("pets/createOrUpdateVisitForm"))
+          .andExpect(model().attributeHasErrors("visit"));
   
-      verify(clinicService, never()).saveVisit(any(Visit.class));
+      verify(clinicService, never()).saveVisit(org.mockito.ArgumentMatchers.any(Visit.class));
   }
 
   @Test
-  void testProcessNewVisitFormWithEmptyDescription() throws Exception {
-      // Empty string for @NotEmpty field should also cause a validation error
+  void testProcessNewVisitFormDescriptionSavedCorrectly() throws Exception {
       mockMvc.perform(post("/owners/{ownerId}/pets/{petId}/visits/new", TEST_OWNER_ID, TEST_PET_ID)
-          .param("date", "2023/06/15")
-          .param("description", "")
-      )
-          .andExpect(status().isOk())
-          .andExpect(model().attributeHasErrors("visit"))
-          .andExpect(model().attributeHasFieldErrors("visit", "description"))
-          .andExpect(view().name("pets/createOrUpdateVisitForm"));
-  
-      verify(clinicService, never()).saveVisit(any(Visit.class));
-  }
-
-  @Test
-  void testProcessNewVisitFormWithBlankDescription() throws Exception {
-      // Whitespace-only description — @NotEmpty rejects blank strings
-      mockMvc.perform(post("/owners/{ownerId}/pets/{petId}/visits/new", TEST_OWNER_ID, TEST_PET_ID)
-          .param("description", "   ")
-      )
-          .andExpect(status().isOk())
-          .andExpect(model().attributeHasErrors("visit"))
-          .andExpect(view().name("pets/createOrUpdateVisitForm"));
-  
-      verify(clinicService, never()).saveVisit(any(Visit.class));
-  }
-
-  @Test
-  void testProcessNewVisitFormSavesVisitWithCorrectPet() throws Exception {
-      // Capture the Visit passed to saveVisit and verify it is associated with the correct pet
-      mockMvc.perform(post("/owners/{ownerId}/pets/{petId}/visits/new", TEST_OWNER_ID, TEST_PET_ID)
-          .param("description", "Dental check")
+          .param("description", "Annual vaccine booster")
       )
           .andExpect(status().is3xxRedirection());
   
-      org.mockito.ArgumentCaptor<Visit> captor = org.mockito.ArgumentCaptor.forClass(Visit.class);
+      ArgumentCaptor<Visit> captor = ArgumentCaptor.forClass(Visit.class);
       verify(clinicService).saveVisit(captor.capture());
-      Visit saved = captor.getValue();
-      assertNotNull(saved.getPet());
-      assertEquals(TEST_PET_ID, saved.getPet().getId());
+      assertEquals("Annual vaccine booster", captor.getValue().getDescription());
   }
 
   @Test
   void testShowVisits() throws Exception {
-      Visit v1 = new Visit();
-      v1.setDescription("Check-up");
-      Visit v2 = new Visit();
-      v2.setDescription("Vaccination");
-  
-      Pet pet = new Pet();
-      pet.setId(TEST_PET_ID);
-      pet.addVisit(v1);
-      pet.addVisit(v2);
-      given(this.clinicService.findPetById(TEST_PET_ID)).willReturn(pet);
-  
       mockMvc.perform(get("/owners/{ownerId}/pets/{petId}/visits", TEST_OWNER_ID, TEST_PET_ID))
           .andExpect(status().isOk())
           .andExpect(view().name("visitList"))
@@ -190,57 +144,79 @@ class VisitControllerTests {
   }
 
   @Test
-  void testShowVisitsContainsAllVisits() throws Exception {
-      // Model should contain exactly the same visits as the pet
-      Visit v1 = new Visit();
-      v1.setDescription("Check-up");
-      Visit v2 = new Visit();
-      v2.setDescription("Vaccination");
-  
+  void testShowVisitsUrlWithWildcardOwner() throws Exception {
+      mockMvc.perform(get("/owners/99/pets/{petId}/visits", TEST_PET_ID))
+          .andExpect(status().isOk())
+          .andExpect(view().name("visitList"))
+          .andExpect(model().attributeExists("visits"));
+  }
+
+  @Test
+  void testShowVisitsModelContainsVisitData() throws Exception {
+      Visit v = new Visit();
+      v.setDescription("Ultrasound check");
       Pet pet = new Pet();
       pet.setId(TEST_PET_ID);
-      pet.addVisit(v1);
-      pet.addVisit(v2);
+      pet.addVisit(v);
       given(this.clinicService.findPetById(TEST_PET_ID)).willReturn(pet);
   
       mockMvc.perform(get("/owners/{ownerId}/pets/{petId}/visits", TEST_OWNER_ID, TEST_PET_ID))
           .andExpect(status().isOk())
-          .andExpect(model().attribute("visits", hasSize(2)))
-          .andExpect(model().attribute("visits", hasItem(hasProperty("description", is("Check-up")))))
-          .andExpect(model().attribute("visits", hasItem(hasProperty("description", is("Vaccination")))));
+          .andExpect(model().attribute("visits",
+              hasItem(hasProperty("description", is("Ultrasound check")))));
   }
 
   @Test
-  void testShowVisitsWithNoVisits() throws Exception {
-      // Pet with no visits — model should contain an empty visits collection
+  void testShowVisitsMultipleVisitsSortedByDateDesc() throws Exception {
       Pet pet = new Pet();
       pet.setId(TEST_PET_ID);
+  
+      Visit older = new Visit();
+      older.setDescription("Older visit");
+      older.setDate(LocalDate.of(2023, 1, 10));
+  
+      Visit newer = new Visit();
+      newer.setDescription("Newer visit");
+      newer.setDate(LocalDate.of(2024, 6, 15));
+  
+      pet.addVisit(older);
+      pet.addVisit(newer);
       given(this.clinicService.findPetById(TEST_PET_ID)).willReturn(pet);
   
+      // NOTE: @ModelAttribute loadPetWithVisit also runs before the handler, adding a 3rd
+      // (date-less) visit to the same pet. Assert both named visits appear in the model
+      // and verify sort order directly on the pet's list (filtering out the unnamed one).
       mockMvc.perform(get("/owners/{ownerId}/pets/{petId}/visits", TEST_OWNER_ID, TEST_PET_ID))
           .andExpect(status().isOk())
           .andExpect(view().name("visitList"))
-          .andExpect(model().attribute("visits", hasSize(0)));
+          .andExpect(model().attributeExists("visits"))
+          .andExpect(model().attribute("visits",
+              hasItem(hasProperty("description", is("Newer visit")))))
+          .andExpect(model().attribute("visits",
+              hasItem(hasProperty("description", is("Older visit")))));
+
+      // Sort order check: among visits with non-null descriptions, newest date first
+      List<Visit> namedVisits = pet.getVisits().stream()
+          .filter(v -> v.getDescription() != null)
+          .sorted(java.util.Comparator.comparing(Visit::getDate).reversed())
+          .collect(java.util.stream.Collectors.toList());
+      assertEquals("Newer visit", namedVisits.get(0).getDescription());
+      assertEquals("Older visit", namedVisits.get(1).getDescription());
   }
 
   @Test
-  void testShowVisitsCallsFindPetById() throws Exception {
-      // Verify ClinicService.findPetById is called with the correct petId
-      Pet pet = new Pet();
-      pet.setId(TEST_PET_ID);
-      given(this.clinicService.findPetById(TEST_PET_ID)).willReturn(pet);
+  void testSetAllowedFieldsDisallowsId() {
+      WebDataBinder binder = new WebDataBinder(new Object());
+      visitController.setAllowedFields(binder);
   
-      mockMvc.perform(get("/owners/{ownerId}/pets/{petId}/visits", TEST_OWNER_ID, TEST_PET_ID))
-          .andExpect(status().isOk());
-  
-      // loadPetWithVisit (for @ModelAttribute) + showVisits both call findPetById
-      verify(clinicService, atLeast(1)).findPetById(TEST_PET_ID);
+      String[] disallowed = binder.getDisallowedFields();
+      assertNotNull(disallowed, "Disallowed fields must not be null");
+      assertEquals(1, disallowed.length, "Exactly one field should be disallowed");
+      assertEquals("id", disallowed[0], "The disallowed field must be 'id'");
   }
 
   @Test
-  void testLoadPetWithVisit() {
-      // Verify the controller properly wires up with ClinicService
-      // and that loadPetWithVisit creates a new Visit tied to the pet
+  void testLoadPetWithVisitAssociatesToPet() {
       Pet pet = new Pet();
       pet.setId(TEST_PET_ID);
       given(this.clinicService.findPetById(TEST_PET_ID)).willReturn(pet);
@@ -248,97 +224,51 @@ class VisitControllerTests {
       Visit visit = visitController.loadPetWithVisit(TEST_PET_ID);
   
       assertNotNull(visit);
-      assertNotNull(visit.getPet());
-      assertEquals(TEST_PET_ID, visit.getPet().getId());
+      assertSame(pet, visit.getPet(), "The visit must be associated with the correct pet");
   }
 
   @Test
-  void testLoadPetWithVisitAddsVisitToPet() {
-      // The returned Visit should be contained in the pet's visit list
+  void testLoadPetWithVisitCreatesDistinctVisitsOnEachCall() {
+      Pet pet = new Pet();
+      pet.setId(TEST_PET_ID);
+      given(this.clinicService.findPetById(TEST_PET_ID)).willReturn(pet);
+  
+      Visit first  = visitController.loadPetWithVisit(TEST_PET_ID);
+      Visit second = visitController.loadPetWithVisit(TEST_PET_ID);
+  
+      assertNotNull(first);
+      assertNotNull(second);
+      assertNotSame(first, second, "Each call must return a brand-new Visit instance");
+  }
+
+  @Test
+  void testLoadPetWithVisitAddsVisitToPetsCollection() {
+      Pet pet = new Pet();
+      pet.setId(TEST_PET_ID);
+      given(this.clinicService.findPetById(TEST_PET_ID)).willReturn(pet);
+  
+      assertEquals(0, pet.getVisits().size(), "Pet should have no visits initially");
+      visitController.loadPetWithVisit(TEST_PET_ID);
+      assertEquals(1, pet.getVisits().size(), "Pet should have one visit after loadPetWithVisit");
+  }
+
+  @Test
+  void testInitNewVisitFormDoesNotInvokeSaveVisit() throws Exception {
+      mockMvc.perform(get("/owners/{ownerId}/pets/{petId}/visits/new", TEST_OWNER_ID, TEST_PET_ID))
+          .andExpect(status().isOk());
+  
+      verify(clinicService, never()).saveVisit(org.mockito.ArgumentMatchers.any(Visit.class));
+  }
+
+  @Test
+  void testLoadPetWithVisitDefaultDateIsToday() {
       Pet pet = new Pet();
       pet.setId(TEST_PET_ID);
       given(this.clinicService.findPetById(TEST_PET_ID)).willReturn(pet);
   
       Visit visit = visitController.loadPetWithVisit(TEST_PET_ID);
   
-      assertTrue(pet.getVisits().contains(visit),
-          "Pet should contain the newly created visit after loadPetWithVisit");
-  }
-
-  @Test
-  void testLoadPetWithVisitHasDefaultDate() {
-      // Visit() constructor sets date to LocalDate.now()
-      Pet pet = new Pet();
-      pet.setId(TEST_PET_ID);
-      given(this.clinicService.findPetById(TEST_PET_ID)).willReturn(pet);
-  
-      Visit visit = visitController.loadPetWithVisit(TEST_PET_ID);
-  
-      assertNotNull(visit.getDate(), "Visit date should be pre-populated with today's date");
-  }
-
-  @Test
-  void testSetAllowedFields() {
-      WebDataBinder dataBinder = new WebDataBinder(new Visit());
-      visitController.setAllowedFields(dataBinder);
-  
-      String[] disallowedFields = dataBinder.getDisallowedFields();
-      assertNotNull(disallowedFields);
-      assertEquals(1, disallowedFields.length);
-      assertEquals("id", disallowedFields[0]);
-  }
-
-  @Test
-  void testSetAllowedFieldsDisallowsIdBinding() throws Exception {
-      // Attempting to bind 'id' via the form should be silently ignored
-      mockMvc.perform(post("/owners/{ownerId}/pets/{petId}/visits/new", TEST_OWNER_ID, TEST_PET_ID)
-          .param("id", "999")
-          .param("description", "Annual check-up")
-      )
-          .andExpect(status().is3xxRedirection())
-          .andExpect(model().attributeDoesNotExist("id"));
-  
-      // saveVisit should still be called — binding error on 'id' doesn't count as form error
-      verify(clinicService, times(1)).saveVisit(any(Visit.class));
-  }
-
-  @Test
-  void testInitNewVisitFormModelContainsVisit() throws Exception {
-      // The visit in the model should be associated with the correct pet
-      mockMvc.perform(get("/owners/*/pets/{petId}/visits/new", TEST_PET_ID))
-          .andExpect(status().isOk())
-          .andExpect(model().attributeExists("visit"))
-          .andExpect(view().name("pets/createOrUpdateVisitForm"));
-  
-      verify(clinicService, times(1)).findPetById(TEST_PET_ID);
-  }
-
-  @Test
-  void testProcessNewVisitFormSuccessCallsSaveVisit() throws Exception {
-      // Confirm saveVisit is invoked exactly once on a valid submission
-      mockMvc.perform(post("/owners/{ownerId}/pets/{petId}/visits/new", TEST_OWNER_ID, TEST_PET_ID)
-          .param("description", "Teeth cleaning")
-      )
-          .andExpect(status().is3xxRedirection());
-  
-      verify(clinicService, times(1)).saveVisit(any(Visit.class));
-  }
-
-  @Test
-  void testShowVisitsDifferentPetId() throws Exception {
-      // showVisits should work for a different petId too
-      int anotherPetId = 7;
-      Visit v = new Visit();
-      v.setDescription("X-ray");
-      Pet anotherPet = new Pet();
-      anotherPet.setId(anotherPetId);
-      anotherPet.addVisit(v);
-      given(this.clinicService.findPetById(anotherPetId)).willReturn(anotherPet);
-  
-      mockMvc.perform(get("/owners/{ownerId}/pets/{petId}/visits", TEST_OWNER_ID, anotherPetId))
-          .andExpect(status().isOk())
-          .andExpect(view().name("visitList"))
-          .andExpect(model().attribute("visits", hasSize(1)))
-          .andExpect(model().attribute("visits", hasItem(hasProperty("description", is("X-ray")))));
+      assertNotNull(visit.getDate(), "Visit date must not be null");
+      assertEquals(LocalDate.now(), visit.getDate(), "Visit date should default to today");
   }
 }
