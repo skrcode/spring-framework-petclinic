@@ -21,6 +21,7 @@ on:
 
 permissions:
   contents: read
+  issues: write
   pull-requests: read
 
 concurrency:
@@ -80,6 +81,37 @@ jobs:
               echo "Review output was not generated."
             fi
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publish review on pull request
+        if: ${{ always() }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event_name == 'workflow_dispatch' && inputs.pull_request_number || github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          if [ ! -f prmerger-review.txt ]; then
+            echo "No prmerger review output available to publish."
+            exit 0
+          fi
+          COMMENT_FILE="$RUNNER_TEMP/prmerger-comment.md"
+          {
+            echo "<!-- prmerger-review-comment -->"
+            echo "## prmerger review"
+            echo ""
+            echo "Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+            echo ""
+            echo '```text'
+            cat prmerger-review.txt
+            echo '```'
+          } > "$COMMENT_FILE"
+          COMMENTS_JSON="$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments?per_page=100")"
+          COMMENT_ID="$(printf '%s' "$COMMENTS_JSON" | jq -r 'map(select(.body | contains("<!-- prmerger-review-comment -->"))) | last | .id // empty')"
+          if [ -n "$COMMENT_ID" ]; then
+            jq -Rs '{body: .}' < "$COMMENT_FILE" | gh api "repos/$GITHUB_REPOSITORY/issues/comments/$COMMENT_ID" --method PATCH --input - >/dev/null
+          else
+            jq -Rs '{body: .}' < "$COMMENT_FILE" | gh api "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" --method POST --input - >/dev/null
+          fi
 
       - name: Upload review artifact
         if: ${{ always() }}
