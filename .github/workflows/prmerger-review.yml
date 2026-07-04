@@ -38,12 +38,24 @@ jobs:
           ref: ${{ github.event_name == 'workflow_dispatch' && format('refs/pull/{0}/head', inputs.pull_request_number) || github.event.pull_request.head.sha }}
           fetch-depth: 0
 
-      - name: Install prmerger CLI
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Build prmerger CLI
         shell: bash
+        env:
+          PRMERGER_CLI_REPOSITORY_URL: https://github.com/JAIPilot/prmerger.git
+          PRMERGER_CLI_REPOSITORY_REF: main
         run: |
           set -euo pipefail
-          curl -fsSL https://raw.githubusercontent.com/prmerger/prmerger-cli/main/install.sh | sh
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          CLI_DIR="$RUNNER_TEMP/prmerger-cli"
+          rm -rf "$CLI_DIR"
+          git clone --depth 1 --branch "$PRMERGER_CLI_REPOSITORY_REF" "$PRMERGER_CLI_REPOSITORY_URL" "$CLI_DIR"
+          "$CLI_DIR/prmerger" --help >/dev/null
 
       - name: Run prmerger review
         shell: bash
@@ -51,7 +63,7 @@ jobs:
           PR_URL: ${{ github.event_name == 'workflow_dispatch' && inputs.pull_request_url || github.event.pull_request.html_url }}
         run: |
           set -euo pipefail
-          prmerger review "$PR_URL" | tee prmerger-review.txt
+          "$RUNNER_TEMP/prmerger-cli/prmerger" review "$PR_URL" | tee prmerger-review.txt
 
       - name: Add review to job summary
         if: ${{ always() }}
