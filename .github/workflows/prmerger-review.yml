@@ -21,8 +21,7 @@ on:
 
 permissions:
   contents: read
-  issues: write
-  pull-requests: read
+  pull-requests: write
 
 concurrency:
   group: prmerger-review-${{ github.event_name == 'workflow_dispatch' && inputs.pull_request_number || github.event.pull_request.number }}
@@ -94,9 +93,8 @@ jobs:
             echo "No prmerger review output available to publish."
             exit 0
           fi
-          COMMENT_FILE="$RUNNER_TEMP/prmerger-comment.md"
+          REVIEW_BODY_FILE="$RUNNER_TEMP/prmerger-review-body.md"
           {
-            echo "<!-- prmerger-review-comment -->"
             echo "## prmerger review"
             echo ""
             echo "Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
@@ -104,14 +102,15 @@ jobs:
             echo '```text'
             cat prmerger-review.txt
             echo '```'
-          } > "$COMMENT_FILE"
-          COMMENTS_JSON="$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments?per_page=100")"
-          COMMENT_ID="$(printf '%s' "$COMMENTS_JSON" | jq -r 'map(select(.body | contains("<!-- prmerger-review-comment -->"))) | last | .id // empty')"
-          if [ -n "$COMMENT_ID" ]; then
-            jq -Rs '{body: .}' < "$COMMENT_FILE" | gh api "repos/$GITHUB_REPOSITORY/issues/comments/$COMMENT_ID" --method PATCH --input - >/dev/null
-          else
-            jq -Rs '{body: .}' < "$COMMENT_FILE" | gh api "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" --method POST --input - >/dev/null
-          fi
+          } > "$REVIEW_BODY_FILE"
+          VERDICT="$(sed -n 's/^VERDICT: //p' prmerger-review.txt | head -n 1 | tr '[:upper:]' '[:lower:]')"
+          REVIEW_EVENT="COMMENT"
+          case "$VERDICT" in
+            approve) REVIEW_EVENT="APPROVE" ;;
+            changes_requested) REVIEW_EVENT="REQUEST_CHANGES" ;;
+            comment) REVIEW_EVENT="COMMENT" ;;
+          esac
+          jq -n --rawfile body "$REVIEW_BODY_FILE" --arg event "$REVIEW_EVENT" '{body: $body, event: $event}' | gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/reviews" --method POST --input - >/dev/null
 
       - name: Upload review artifact
         if: ${{ always() }}
