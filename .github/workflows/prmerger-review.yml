@@ -72,9 +72,13 @@ jobs:
           {
             echo "## prmerger review"
             echo ""
-            echo "```text"
-            cat prmerger-review.txt
-            echo "```"
+            if [ -f prmerger-review.txt ]; then
+              echo '```text'
+              cat prmerger-review.txt
+              echo '```'
+            else
+              echo "Review output was not generated."
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload review artifact
@@ -83,3 +87,4 @@ jobs:
         with:
           name: prmerger-review
           path: prmerger-review.txt
+          if-no-files-found: ignore
