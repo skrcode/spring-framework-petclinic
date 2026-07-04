@@ -1,0 +1,73 @@
+# managed-by: prmerger-github-app
+name: prmerger Review
+
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
+  workflow_dispatch:
+    inputs:
+      pull_request_url:
+        description: GitHub pull request URL to review
+        required: true
+        type: string
+      pull_request_number:
+        description: Pull request number to checkout
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: prmerger-review-${{ github.event_name == 'workflow_dispatch' && inputs.pull_request_number || github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout pull request head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && format('refs/pull/{0}/head', inputs.pull_request_number) || github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: Install prmerger CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL https://raw.githubusercontent.com/prmerger/prmerger-cli/main/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Run prmerger review
+        shell: bash
+        env:
+          PR_URL: ${{ github.event_name == 'workflow_dispatch' && inputs.pull_request_url || github.event.pull_request.html_url }}
+        run: |
+          set -euo pipefail
+          prmerger review "$PR_URL" | tee prmerger-review.txt
+
+      - name: Add review to job summary
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          {
+            echo "## prmerger review"
+            echo ""
+            echo "```text"
+            cat prmerger-review.txt
+            echo "```"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload review artifact
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: prmerger-review
+          path: prmerger-review.txt
