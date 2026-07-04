@@ -63,7 +63,7 @@ jobs:
           PR_URL: ${{ github.event_name == 'workflow_dispatch' && inputs.pull_request_url || github.event.pull_request.html_url }}
         run: |
           set -euo pipefail
-          "$RUNNER_TEMP/prmerger-cli/prmerger" review "$PR_URL" | tee prmerger-review.txt
+          "$RUNNER_TEMP/prmerger-cli/prmerger" review "$PR_URL" --output-json prmerger-review.json | tee prmerger-review.txt
 
       - name: Add review to job summary
         if: ${{ always() }}
@@ -72,7 +72,11 @@ jobs:
           {
             echo "## prmerger review"
             echo ""
-            if [ -f prmerger-review.txt ]; then
+            if [ -f prmerger-review.json ] && [ "$(jq -r '.reviewReport // empty' prmerger-review.json)" != "" ]; then
+              echo '```text'
+              jq -r '.reviewReport' prmerger-review.json
+              echo '```'
+            elif [ -f prmerger-review.txt ]; then
               echo '```text'
               cat prmerger-review.txt
               echo '```'
@@ -89,36 +93,156 @@ jobs:
           PR_NUMBER: ${{ github.event_name == 'workflow_dispatch' && inputs.pull_request_number || github.event.pull_request.number }}
         run: |
           set -euo pipefail
-          if [ ! -f prmerger-review.txt ]; then
-            echo "No prmerger review output available to publish."
+          if [ ! -f prmerger-review.json ]; then
+            echo "No structured prmerger review output available to publish."
             exit 0
           fi
-          REVIEW_BODY_FILE="$RUNNER_TEMP/prmerger-review-body.md"
-          {
-            echo "## prmerger review"
-            echo ""
-            echo "Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
-            echo ""
-            echo '```text'
-            cat prmerger-review.txt
-            echo '```'
-          } > "$REVIEW_BODY_FILE"
-          VERDICT=""
-          if grep -q 'VERDICT:' prmerger-review.txt; then
-            VERDICT="$(grep -m 1 'VERDICT:' prmerger-review.txt | sed 's/^.*VERDICT: //' | tr '[:upper:]' '[:lower:]')"
-          fi
-          REVIEW_EVENT="COMMENT"
-          case "$VERDICT" in
-            approve) REVIEW_EVENT="APPROVE" ;;
-            changes_requested) REVIEW_EVENT="REQUEST_CHANGES" ;;
-            comment) REVIEW_EVENT="COMMENT" ;;
-          esac
-          jq -n --rawfile body "$REVIEW_BODY_FILE" --arg event "$REVIEW_EVENT" '{body: $body, event: $event}' | gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/reviews" --method POST --input - >/dev/null
+          REVIEW_PAYLOAD_FILE="$RUNNER_TEMP/prmerger-review-payload.json"
+          export REVIEW_PAYLOAD_FILE
+          python3 <<'PY'
+          import json
+          import os
+          import re
+          import subprocess
+          from pathlib import Path
+
+          repo = os.environ["GITHUB_REPOSITORY"]
+          pr_number = os.environ["PR_NUMBER"]
+          run_url = f"{os.environ['GITHUB_SERVER_URL']}/{repo}/actions/runs/{os.environ['GITHUB_RUN_ID']}"
+          review = json.loads(Path("prmerger-review.json").read_text(encoding="utf-8"))
+          files_pages = json.loads(subprocess.check_output([
+              "gh",
+              "api",
+              "--paginate",
+              "--slurp",
+              f"repos/{repo}/pulls/{pr_number}/files?per_page=100",
+          ], text=True))
+          files = []
+          for page in files_pages:
+              if isinstance(page, list):
+                  files.extend(page)
+              else:
+                  files.append(page)
+          head_sha = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+
+          def build_positions(patch: str):
+              left = {}
+              right = {}
+              position = 0
+              old_line = None
+              new_line = None
+              for raw_line in patch.splitlines():
+                  if raw_line.startswith("@@"):
+                      match = re.match(r"@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@", raw_line)
+                      if not match:
+                          old_line = None
+                          new_line = None
+                          continue
+                      old_line = int(match.group(1))
+                      new_line = int(match.group(2))
+                      continue
+                  if old_line is None or new_line is None:
+                      continue
+                  position += 1
+                  if raw_line.startswith("+") and not raw_line.startswith("+++"):
+                      right.setdefault(new_line, position)
+                      new_line += 1
+                  elif raw_line.startswith("-") and not raw_line.startswith("---"):
+                      left.setdefault(old_line, position)
+                      old_line += 1
+                  else:
+                      left.setdefault(old_line, position)
+                      right.setdefault(new_line, position)
+                      old_line += 1
+                      new_line += 1
+              return left, right
+
+          file_map = {}
+          for item in files:
+              patch = item.get("patch") or ""
+              left, right = build_positions(patch)
+              entry = {
+                  "left": left,
+                  "right": right,
+                  "status": item.get("status"),
+              }
+              file_map[item["filename"]] = entry
+              previous_filename = item.get("previous_filename")
+              if previous_filename and previous_filename not in file_map:
+                  file_map[previous_filename] = entry
+
+          def format_comment(finding):
+              severity = str(finding.get("severity") or "comment").upper()
+              title = str(finding.get("title") or "Finding").strip()
+              explanation = str(finding.get("explanation") or "").strip()
+              return f"[{severity}] {title}\n\n{explanation}"
+
+          comments = []
+          unanchored = []
+          for finding in review.get("findings") or []:
+              path = str(finding.get("path") or "").strip()
+              line = finding.get("line")
+              if not path or not isinstance(line, int):
+                  unanchored.append(finding)
+                  continue
+              file_entry = file_map.get(path)
+              if not file_entry:
+                  unanchored.append(finding)
+                  continue
+              position = file_entry["right"].get(line)
+              if position is None:
+                  position = file_entry["left"].get(line)
+              if position is None:
+                  unanchored.append(finding)
+                  continue
+              comments.append({
+                  "path": path,
+                  "position": position,
+                  "body": format_comment(finding),
+              })
+
+          review_report = str(review.get("reviewReport") or "").strip()
+          body_lines = ["## prmerger review", "", f"Run: {run_url}"]
+          if review_report:
+              body_lines.extend(["", review_report])
+          if unanchored:
+              body_lines.extend(["", "UNANCHORED_FINDINGS:"])
+              for finding in unanchored:
+                  severity = str(finding.get("severity") or "comment").strip()
+                  path = str(finding.get("path") or "unknown").strip()
+                  line = finding.get("line")
+                  title = str(finding.get("title") or "Finding").strip()
+                  explanation = str(finding.get("explanation") or "").strip()
+                  anchor = f"{path}:{line}" if isinstance(line, int) else path
+                  body_lines.append(f"- [{severity}] {anchor} {title} - {explanation}")
+
+          payload = {
+              "body": "\n".join(body_lines).strip(),
+              "event": "COMMENT",
+              "commit_id": head_sha,
+          }
+          verdict = str(review.get("verdict") or "").strip().lower()
+          if verdict == "approve":
+              payload["event"] = "APPROVE"
+          elif verdict == "changes_requested":
+              payload["event"] = "REQUEST_CHANGES"
+          if comments:
+              payload["comments"] = comments
+
+          Path(os.environ["REVIEW_PAYLOAD_FILE"]).write_text(
+              json.dumps(payload),
+              encoding="utf-8",
+          )
+          print(f"Prepared {len(comments)} inline comment(s); {len(unanchored)} unanchored finding(s).")
+          PY
+          gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/reviews" --method POST --input "$REVIEW_PAYLOAD_FILE" >/dev/null
 
       - name: Upload review artifact
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
           name: prmerger-review
-          path: prmerger-review.txt
+          path: |
+            prmerger-review.txt
+            prmerger-review.json
           if-no-files-found: ignore
