@@ -103,7 +103,10 @@ jobs:
             cat prmerger-review.txt
             echo '```'
           } > "$REVIEW_BODY_FILE"
-          VERDICT="$(sed -n 's/^VERDICT: //p' prmerger-review.txt | head -n 1 | tr '[:upper:]' '[:lower:]')"
+          VERDICT=""
+          if grep -q 'VERDICT:' prmerger-review.txt; then
+            VERDICT="$(grep -m 1 'VERDICT:' prmerger-review.txt | sed 's/^.*VERDICT: //' | tr '[:upper:]' '[:lower:]')"
+          fi
           REVIEW_EVENT="COMMENT"
           case "$VERDICT" in
             approve) REVIEW_EVENT="APPROVE" ;;
