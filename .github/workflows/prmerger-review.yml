@@ -180,9 +180,42 @@ jobs:
               explanation = str(finding.get("explanation") or "").strip()
               return f"**PRMerger [{severity}]** {title}\n\n{explanation}"
 
+          def is_cosmetic(finding):
+              haystack = " ".join([
+                  str(finding.get("title") or ""),
+                  str(finding.get("explanation") or ""),
+              ]).lower()
+              cosmetic_markers = [
+                  "cosmetic",
+                  "formatting",
+                  "whitespace",
+                  "blank line",
+                  "blank lines",
+                  "readability",
+                  "stylistic",
+                  "style-only",
+                  "style only",
+                  "naming",
+                  "import ordering",
+                  "import order",
+              ]
+              return any(marker in haystack for marker in cosmetic_markers)
+
+          def should_publish_inline(finding):
+              severity = str(finding.get("severity") or "comment").strip().lower()
+              if severity in {"critical", "high"}:
+                  return True
+              if severity == "medium" and not is_cosmetic(finding):
+                  return True
+              return False
+
           comments = []
+          summary_only = []
           unanchored = []
           for finding in review.get("findings") or []:
+              if not should_publish_inline(finding):
+                  summary_only.append(finding)
+                  continue
               path = str(finding.get("path") or "").strip()
               line = finding.get("line")
               if not path or not isinstance(line, int):
@@ -205,9 +238,12 @@ jobs:
               })
 
           review_report = str(review.get("reviewReport") or "").strip()
-          body_lines = ["## PRMerger Review", "", "Automated by PRMerger.", "", f"Run: {run_url}"]
+          body_lines = ["## PRMerger Review", "", "Machine-reviewed on a GitHub Actions runner. Build and test evidence is included below.", "", f"Run: {run_url}"]
           if review_report:
               body_lines.extend(["", review_report])
+          body_lines.extend(["", f"Inline comments posted: {len(comments)} high-signal finding(s)."])
+          if summary_only:
+              body_lines.append(f"Summary-only notes: {len(summary_only)} lower-priority finding(s).")
           if unanchored:
               body_lines.extend(["", "UNANCHORED_FINDINGS:"])
               for finding in unanchored:
@@ -236,7 +272,7 @@ jobs:
               json.dumps(payload),
               encoding="utf-8",
           )
-          print(f"Prepared {len(comments)} inline comment(s); {len(unanchored)} unanchored finding(s).")
+          print(f"Prepared {len(comments)} inline comment(s); {len(summary_only)} summary-only finding(s); {len(unanchored)} unanchored finding(s).")
           PY
           oidc_response="$(curl -fsSL \
             -H "Authorization: Bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
