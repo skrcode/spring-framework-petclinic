@@ -1,0 +1,24 @@
+name: JAIPilot Generate Tests
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  jaipilot:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+
+      - name: Run JAIPilot
+        uses: JAIPilot/jaipilot-cli@action-v1
+        with:
+          jaipilot-license-key: ${{ secrets.JAIPILOT_LICENSE_KEY }}
