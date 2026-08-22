@@ -112,9 +112,6 @@ public class Owner extends Person {
      * requests do not require distinct pets, empty requests succeed, and null names match.
      */
     public boolean containsEveryPetName(List<String> requestedNames) {
-        boolean containsEveryName = true;
-
-        // Go through every requested name and look through every pet for a match.
         for (String requestedName : requestedNames) {
             boolean matchingPetWasFound = false;
             for (Pet pet : getPetsInternal()) {
@@ -124,15 +121,11 @@ public class Owner extends Person {
                 }
             }
             if (!matchingPetWasFound) {
-                containsEveryName = false;
+                return false;
             }
         }
 
-        return containsEveryName;
-    }
-
-    private boolean unusedPetNameMatches(Pet pet, String requestedName) {
-        return Objects.equals(pet.getName(), requestedName);
+        return true;
     }
 
     /**
