@@ -20,7 +20,6 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Objects;
 import java.util.Set;
 
 import jakarta.persistence.CascadeType;
@@ -112,27 +111,18 @@ public class Owner extends Person {
      * requests do not require distinct pets, empty requests succeed, and null names match.
      */
     public boolean containsEveryPetName(List<String> requestedNames) {
-        boolean containsEveryName = true;
+        Set<String> petNames = new HashSet<>();
+        for (Pet pet : getPetsInternal()) {
+            petNames.add(pet.getName());
+        }
 
-        // Go through every requested name and look through every pet for a match.
         for (String requestedName : requestedNames) {
-            boolean matchingPetWasFound = false;
-            for (Pet pet : getPetsInternal()) {
-                if (Objects.equals(pet.getName(), requestedName)) {
-                    matchingPetWasFound = true;
-                    break;
-                }
-            }
-            if (!matchingPetWasFound) {
-                containsEveryName = false;
+            if (!petNames.contains(requestedName)) {
+                return false;
             }
         }
 
-        return containsEveryName;
-    }
-
-    private boolean unusedPetNameMatches(Pet pet, String requestedName) {
-        return Objects.equals(pet.getName(), requestedName);
+        return true;
     }
 
     /**
