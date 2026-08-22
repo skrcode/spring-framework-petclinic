@@ -2,6 +2,7 @@ package org.springframework.samples.petclinic.model;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.Arrays;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
@@ -94,5 +95,88 @@ class OwnerTests {
         assertThat(pets.get(0).getName()).isEqualTo("Alpha");
         assertThat(pets.get(1).getName()).isEqualTo("buddy");
         assertThat(pets.get(2).getName()).isEqualTo("ZEPHYR");
+    }
+
+    @Test
+    void shouldContainEveryPetNameWhenAllRequestedNamesMatch() {
+        // Given
+        Owner owner = new Owner();
+
+        Pet pet1 = new Pet();
+        pet1.setName("Buddy");
+
+        Pet pet2 = new Pet();
+        pet2.setName("Max");
+
+        owner.addPet(pet1);
+        owner.addPet(pet2);
+
+        // When / Then
+        assertThat(owner.containsEveryPetName(List.of("Buddy", "Max"))).isTrue();
+    }
+
+    @Test
+    void shouldNotContainEveryPetNameWhenOneRequestedNameIsMissing() {
+        // Given
+        Owner owner = new Owner();
+
+        Pet pet1 = new Pet();
+        pet1.setName("Buddy");
+
+        owner.addPet(pet1);
+
+        // When / Then
+        assertThat(owner.containsEveryPetName(List.of("Buddy", "Max"))).isFalse();
+    }
+
+    @Test
+    void shouldContainEveryPetNameWhenRequestedNamesListIsEmpty() {
+        // Given
+        Owner owner = new Owner();
+
+        Pet pet1 = new Pet();
+        pet1.setName("Buddy");
+
+        owner.addPet(pet1);
+
+        // When / Then
+        assertThat(owner.containsEveryPetName(List.of())).isTrue();
+    }
+
+    @Test
+    void shouldNotContainEveryPetNameWhenOwnerHasNoPets() {
+        // Given
+        Owner owner = new Owner();
+
+        // When / Then
+        assertThat(owner.containsEveryPetName(List.of("Buddy"))).isFalse();
+    }
+
+    @Test
+    void shouldMatchPetNamesCaseSensitively() {
+        // Given
+        Owner owner = new Owner();
+
+        Pet pet1 = new Pet();
+        pet1.setName("Buddy");
+
+        owner.addPet(pet1);
+
+        // When / Then
+        assertThat(owner.containsEveryPetName(List.of("buddy"))).isFalse();
+    }
+
+    @Test
+    void shouldContainNullRequestedNameWhenAPetHasNullName() {
+        // Given
+        Owner owner = new Owner();
+
+        Pet pet1 = new Pet();
+        pet1.setName(null);
+
+        owner.addPet(pet1);
+
+        // When / Then
+        assertThat(owner.containsEveryPetName(Arrays.asList((String) null))).isTrue();
     }
 }
