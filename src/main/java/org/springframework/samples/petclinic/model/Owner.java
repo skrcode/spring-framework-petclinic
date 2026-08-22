@@ -16,10 +16,12 @@
 package org.springframework.samples.petclinic.model;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 
 import jakarta.persistence.CascadeType;
@@ -134,6 +136,27 @@ public class Owner extends Person {
             }
         }
         return null;
+    }
+
+    /**
+     * Return whether this owner has a pet matching every supplied identifier.
+     *
+     * @param petIds pet identifiers to match
+     */
+    public boolean hasPetsWithIds(Collection<Integer> petIds) {
+        for (Integer petId : petIds) {
+            boolean matched = false;
+            for (Pet pet : getPetsInternal()) {
+                if (Objects.equals(pet.getId(), petId)) {
+                    matched = true;
+                    break;
+                }
+            }
+            if (!matched) {
+                return false;
+            }
+        }
+        return true;
     }
 
     @Override
