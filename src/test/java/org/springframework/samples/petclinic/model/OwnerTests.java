@@ -2,6 +2,8 @@ package org.springframework.samples.petclinic.model;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
@@ -94,5 +96,24 @@ class OwnerTests {
         assertThat(pets.get(0).getName()).isEqualTo("Alpha");
         assertThat(pets.get(1).getName()).isEqualTo("buddy");
         assertThat(pets.get(2).getName()).isEqualTo("ZEPHYR");
+    }
+
+    @Test
+    void shouldCheckEveryPetIdentifier() {
+        Owner owner = new Owner();
+        Pet max = new Pet();
+        max.setId(10);
+        Pet bella = new Pet();
+        bella.setId(20);
+        Pet unsaved = new Pet();
+        owner.addPet(max);
+        owner.addPet(bella);
+        owner.addPet(unsaved);
+
+        assertThat(owner.hasPetsWithIds(List.of(10, 20))).isTrue();
+        assertThat(owner.hasPetsWithIds(List.of(10, 10))).isTrue();
+        assertThat(owner.hasPetsWithIds(Collections.emptyList())).isTrue();
+        assertThat(owner.hasPetsWithIds(Arrays.asList(10, null))).isTrue();
+        assertThat(owner.hasPetsWithIds(List.of(10, 30))).isFalse();
     }
 }
