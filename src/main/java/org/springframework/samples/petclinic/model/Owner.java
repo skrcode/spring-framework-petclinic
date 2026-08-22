@@ -21,7 +21,6 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Objects;
 import java.util.Set;
 
 import jakarta.persistence.CascadeType;
@@ -144,19 +143,11 @@ public class Owner extends Person {
      * @param petIds pet identifiers to match
      */
     public boolean hasPetsWithIds(Collection<Integer> petIds) {
-        for (Integer petId : petIds) {
-            boolean matched = false;
-            for (Pet pet : getPetsInternal()) {
-                if (Objects.equals(pet.getId(), petId)) {
-                    matched = true;
-                    break;
-                }
-            }
-            if (!matched) {
-                return false;
-            }
+        Set<Integer> ownedPetIds = new HashSet<>();
+        for (Pet pet : getPetsInternal()) {
+            ownedPetIds.add(pet.getId());
         }
-        return true;
+        return ownedPetIds.containsAll(petIds);
     }
 
     @Override
