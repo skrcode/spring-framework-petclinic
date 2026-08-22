@@ -107,6 +107,10 @@ public class Owner extends Person {
         pet.setOwner(this);
     }
 
+    /**
+     * Return whether every requested name belongs to a pet. Matching is case-sensitive, duplicate
+     * requests do not require distinct pets, empty requests succeed, and null names match.
+     */
     public boolean containsEveryPetName(List<String> requestedNames) {
         boolean containsEveryName = true;
 
