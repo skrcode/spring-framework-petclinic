@@ -16,6 +16,7 @@
 package org.springframework.samples.petclinic.model;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -134,6 +135,27 @@ public class Owner extends Person {
             }
         }
         return null;
+    }
+
+    /**
+     * Return whether this owner has a pet matching every supplied name.
+     *
+     * @param names pet names to match without regard to case
+     */
+    public boolean hasPetsNamed(Collection<String> names) {
+        for (String name : names) {
+            boolean matched = false;
+            for (Pet pet : getPetsInternal()) {
+                if (pet.getName().equalsIgnoreCase(name)) {
+                    matched = true;
+                    break;
+                }
+            }
+            if (!matched) {
+                return false;
+            }
+        }
+        return true;
     }
 
     @Override

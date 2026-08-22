@@ -2,6 +2,7 @@ package org.springframework.samples.petclinic.model;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.Collections;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
@@ -94,5 +95,21 @@ class OwnerTests {
         assertThat(pets.get(0).getName()).isEqualTo("Alpha");
         assertThat(pets.get(1).getName()).isEqualTo("buddy");
         assertThat(pets.get(2).getName()).isEqualTo("ZEPHYR");
+    }
+
+    @Test
+    void shouldCheckAllPetNamesWithoutRegardToCase() {
+        Owner owner = new Owner();
+        Pet max = new Pet();
+        max.setName("Max");
+        Pet bella = new Pet();
+        bella.setName("Bella");
+        owner.addPet(max);
+        owner.addPet(bella);
+
+        assertThat(owner.hasPetsNamed(List.of("max", "BELLA"))).isTrue();
+        assertThat(owner.hasPetsNamed(List.of("Max", "Max"))).isTrue();
+        assertThat(owner.hasPetsNamed(Collections.emptyList())).isTrue();
+        assertThat(owner.hasPetsNamed(List.of("Max", "Missing"))).isFalse();
     }
 }
