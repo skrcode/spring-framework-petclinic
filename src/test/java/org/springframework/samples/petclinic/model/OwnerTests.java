@@ -2,6 +2,7 @@ package org.springframework.samples.petclinic.model;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
@@ -111,5 +112,11 @@ class OwnerTests {
         assertThat(owner.hasPetsNamed(List.of("Max", "Max"))).isTrue();
         assertThat(owner.hasPetsNamed(Collections.emptyList())).isTrue();
         assertThat(owner.hasPetsNamed(List.of("Max", "Missing"))).isFalse();
+        assertThat(owner.hasPetsNamed(Arrays.asList("Max", null))).isFalse();
+
+        Pet istanbul = new Pet();
+        istanbul.setName("Istanbul");
+        owner.addPet(istanbul);
+        assertThat(owner.hasPetsNamed(List.of("\u0131stanbul"))).isTrue();
     }
 }
