@@ -143,15 +143,12 @@ public class Owner extends Person {
      * @param names pet names to match without regard to case
      */
     public boolean hasPetsNamed(Collection<String> names) {
+        Set<String> petNames = new HashSet<>();
+        for (Pet pet : getPetsInternal()) {
+            petNames.add(pet.getName().toLowerCase());
+        }
         for (String name : names) {
-            boolean matched = false;
-            for (Pet pet : getPetsInternal()) {
-                if (pet.getName().equalsIgnoreCase(name)) {
-                    matched = true;
-                    break;
-                }
-            }
-            if (!matched) {
+            if (!petNames.contains(name.toLowerCase())) {
                 return false;
             }
         }
