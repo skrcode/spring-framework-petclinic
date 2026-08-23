@@ -113,7 +113,7 @@ using the Maven profile "css", i.e. `./mvnw generate-resources -P css`.
 
 ### Prerequisites
 The following items should be installed in your system:
-* Java 17 or newer (full JDK not a JRE)
+* Java 25 or newer (full JDK not a JRE)
 * Maven 3.8+ (https://maven.apache.org/install.html)
 * git command line tool (https://help.github.com/articles/set-up-git)
 * Jetty 11.0+ or Tomcat 11+
