@@ -102,4 +102,38 @@ class VetTests {
 
         assertFalse(vet.hasSpecialtyNamed("radiology"));
     }
+
+    @Test
+    void hasSpecialtyNamed_shouldReturnFalse_whenNoSpecialties() {
+        assertFalse(vet.hasSpecialtyNamed("surgery"));
+    }
+
+    @Test
+    void hasSpecialtyNamed_shouldReturnFalse_whenNameIsNull() {
+        Specialty surgery = new Specialty();
+        surgery.setName("surgery");
+        vet.addSpecialty(surgery);
+
+        assertFalse(vet.hasSpecialtyNamed(null));
+    }
+
+    @Test
+    void hasSpecialtyNamed_shouldMatchAnyOfSeveralSpecialties() {
+        Specialty surgery = new Specialty();
+        surgery.setName("surgery");
+
+        Specialty dentistry = new Specialty();
+        dentistry.setName("dentistry");
+
+        Specialty radiology = new Specialty();
+        radiology.setName("radiology");
+
+        vet.addSpecialty(surgery);
+        vet.addSpecialty(dentistry);
+        vet.addSpecialty(radiology);
+
+        assertTrue(vet.hasSpecialtyNamed("radiology"));
+        assertTrue(vet.hasSpecialtyNamed("SURGERY"));
+        assertFalse(vet.hasSpecialtyNamed("oncology"));
+    }
 }

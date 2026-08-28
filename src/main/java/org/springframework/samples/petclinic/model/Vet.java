@@ -71,12 +71,8 @@ public class Vet extends Person {
     }
 
     public boolean hasSpecialtyNamed(String name) {
-        boolean found = getSpecialties().stream()
+        return getSpecialtiesInternal().stream()
             .anyMatch(specialty -> specialty.getName().equalsIgnoreCase(name));
-        if (found) {
-            return true;
-        }
-        return false;
     }
 
     public void addSpecialty(Specialty specialty) {
