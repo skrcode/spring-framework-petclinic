@@ -3,6 +3,7 @@ package org.springframework.samples.petclinic.model;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.util.LinkedHashSet;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -101,5 +102,16 @@ class VetTests {
         vet.addSpecialty(surgery);
 
         assertFalse(vet.hasSpecialtyNamed("radiology"));
+    }
+
+    @Test
+    void hasSpecialtyNamed_shouldPreserveEagerFailureForNullStoredName() {
+        Specialty surgery = new Specialty();
+        surgery.setName("surgery");
+
+        Specialty unnamed = new Specialty();
+        vet.setSpecialtiesInternal(new LinkedHashSet<>(List.of(surgery, unnamed)));
+
+        assertThrows(NullPointerException.class, () -> vet.hasSpecialtyNamed("surgery"));
     }
 }
