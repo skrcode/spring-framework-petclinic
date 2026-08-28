@@ -84,4 +84,22 @@ class VetTests {
 
         assertEquals(2, vet.getNrOfSpecialties());
     }
+
+    @Test
+    void hasSpecialtyNamed_shouldMatchIgnoringCase() {
+        Specialty surgery = new Specialty();
+        surgery.setName("surgery");
+        vet.addSpecialty(surgery);
+
+        assertTrue(vet.hasSpecialtyNamed("SURGERY"));
+    }
+
+    @Test
+    void hasSpecialtyNamed_shouldReturnFalseForMissingName() {
+        Specialty surgery = new Specialty();
+        surgery.setName("surgery");
+        vet.addSpecialty(surgery);
+
+        assertFalse(vet.hasSpecialtyNamed("radiology"));
+    }
 }
