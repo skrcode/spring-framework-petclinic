@@ -1,7 +1,10 @@
 package org.springframework.samples.petclinic.model;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
@@ -94,5 +97,98 @@ class OwnerTests {
         assertThat(pets.get(0).getName()).isEqualTo("Alpha");
         assertThat(pets.get(1).getName()).isEqualTo("buddy");
         assertThat(pets.get(2).getName()).isEqualTo("ZEPHYR");
+    }
+
+    @Test
+    void containsEveryPetNameShouldReturnTrueWhenAllRequestedNamesMatch() {
+        Owner owner = new Owner();
+
+        Pet pet1 = new Pet();
+        pet1.setName("Buddy");
+        Pet pet2 = new Pet();
+        pet2.setName("Max");
+
+        owner.addPet(pet1);
+        owner.addPet(pet2);
+
+        assertThat(owner.containsEveryPetName(Arrays.asList("Buddy", "Max"))).isTrue();
+    }
+
+    @Test
+    void containsEveryPetNameShouldReturnFalseWhenAnyRequestedNameIsMissing() {
+        Owner owner = new Owner();
+
+        Pet pet = new Pet();
+        pet.setName("Buddy");
+        owner.addPet(pet);
+
+        assertThat(owner.containsEveryPetName(Arrays.asList("Buddy", "Ghost"))).isFalse();
+    }
+
+    @Test
+    void containsEveryPetNameShouldReturnTrueForEmptyRequest() {
+        Owner owner = new Owner();
+
+        Pet pet = new Pet();
+        pet.setName("Buddy");
+        owner.addPet(pet);
+
+        assertThat(owner.containsEveryPetName(Collections.emptyList())).isTrue();
+    }
+
+    @Test
+    void containsEveryPetNameShouldReturnTrueWhenOwnerHasNoPetsAndNoNamesRequested() {
+        Owner owner = new Owner();
+
+        assertThat(owner.containsEveryPetName(Collections.emptyList())).isTrue();
+    }
+
+    @Test
+    void containsEveryPetNameShouldReturnFalseWhenOwnerHasNoPetsButNamesRequested() {
+        Owner owner = new Owner();
+
+        assertThat(owner.containsEveryPetName(Collections.singletonList("Buddy"))).isFalse();
+    }
+
+    @Test
+    void containsEveryPetNameShouldAllowDuplicateRequestsForTheSamePet() {
+        Owner owner = new Owner();
+
+        Pet pet = new Pet();
+        pet.setName("Buddy");
+        owner.addPet(pet);
+
+        assertThat(owner.containsEveryPetName(Arrays.asList("Buddy", "Buddy"))).isTrue();
+    }
+
+    @Test
+    void containsEveryPetNameShouldBeCaseSensitive() {
+        Owner owner = new Owner();
+
+        Pet pet = new Pet();
+        pet.setName("Buddy");
+        owner.addPet(pet);
+
+        assertThat(owner.containsEveryPetName(Collections.singletonList("buddy"))).isFalse();
+    }
+
+    @Test
+    void containsEveryPetNameShouldMatchNullRequestedNameAgainstNullPetName() {
+        Owner owner = new Owner();
+
+        Pet pet = new Pet();
+        // name intentionally left unset (null)
+        owner.addPet(pet);
+
+        assertThat(owner.containsEveryPetName(Collections.singletonList(null))).isTrue();
+    }
+
+    @Test
+    void containsEveryPetNameShouldRejectNullRequestList() {
+        Owner owner = new Owner();
+
+        List<String> nullList = null;
+        assertThatThrownBy(() -> owner.containsEveryPetName(nullList))
+            .isInstanceOf(NullPointerException.class);
     }
 }
