@@ -1,6 +1,5 @@
 package org.springframework.samples.petclinic.web;
 
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -16,6 +15,9 @@ import java.util.Collection;
 import java.util.Locale;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Test class for {@link PetTypeFormatter}
@@ -44,18 +46,28 @@ class PetTypeFormatterTests {
     }
 
     @Test
-    void shouldParse() throws ParseException {
-        Mockito.when(clinicService.findPetTypes()).thenReturn(makePetTypes());
-        PetType petType = petTypeFormatter.parse("Bird", Locale.ENGLISH);
-        assertEquals("Bird", petType.getName());
+    void shouldParseIgnoringCase() throws ParseException {
+        Collection<PetType> petTypes = makePetTypes();
+        PetType configuredPetType = petTypes.stream()
+            .filter(petType -> petType.getName().equals("Bird"))
+            .findFirst()
+            .orElseThrow();
+        Mockito.when(clinicService.findPetTypes()).thenReturn(petTypes);
+
+        PetType parsedPetType = petTypeFormatter.parse("bIrD", Locale.ENGLISH);
+
+        assertSame(configuredPetType, parsedPetType);
     }
 
     @Test
-    void shouldThrowParseException() throws ParseException {
+    void shouldRejectUnknownTypeWithSubmittedValue() {
         Mockito.when(clinicService.findPetTypes()).thenReturn(makePetTypes());
-        Assertions.assertThrows(ParseException.class, () -> {
-            petTypeFormatter.parse("Fish", Locale.ENGLISH);
-        });
+        String submittedValue = "Fish";
+
+        ParseException exception = assertThrows(ParseException.class,
+                () -> petTypeFormatter.parse(submittedValue, Locale.ENGLISH));
+
+        assertTrue(exception.getMessage().contains(submittedValue));
     }
 
     /**
