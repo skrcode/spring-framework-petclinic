@@ -104,6 +104,10 @@ public class JdbcOwnerRepositoryImpl implements OwnerRepository {
     }
 
     public void loadPetsAndVisits(final Owner owner) {
+        loadPetsAndVisits(owner, getPetTypes());
+    }
+
+    private void loadPetsAndVisits(final Owner owner, Collection<PetType> petTypes) {
         final List<JdbcPet> pets = this.jdbcClient.sql("""
             SELECT pets.id, name, birth_date, type_id, owner_id, visits.id as visit_id, visit_date, description, pet_id
             FROM pets LEFT OUTER JOIN visits ON pets.id = pet_id
@@ -111,7 +115,6 @@ public class JdbcOwnerRepositoryImpl implements OwnerRepository {
             """)
             .param("id", owner.getId())
             .query(new JdbcPetVisitExtractor());
-        Collection<PetType> petTypes = getPetTypes();
         for (JdbcPet pet : pets) {
             pet.setType(EntityUtils.getById(petTypes, PetType.class, pet.getTypeId()));
             owner.addPet(pet);
@@ -148,8 +151,12 @@ public class JdbcOwnerRepositoryImpl implements OwnerRepository {
      * @see #loadPetsAndVisits(Owner)
      */
     private void loadOwnersPetsAndVisits(List<Owner> owners) {
+        if (owners.isEmpty()) {
+            return;
+        }
+        Collection<PetType> petTypes = getPetTypes();
         for (Owner owner : owners) {
-            loadPetsAndVisits(owner);
+            loadPetsAndVisits(owner, petTypes);
         }
     }
 
