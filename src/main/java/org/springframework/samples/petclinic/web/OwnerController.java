@@ -76,10 +76,9 @@ public class OwnerController {
     @GetMapping(value = "/owners")
     public String processFindForm(Owner owner, BindingResult result, Map<String, Object> model) {
 
-        // allow parameterless GET request for /owners to return all records
-        if (owner.getLastName() == null) {
-            owner.setLastName(""); // empty string signifies broadest possible search
-        }
+        // Ignore whitespace around a search term while retaining the existing
+        // broad search for parameterless requests.
+        owner.setLastName(owner.getLastName() == null ? "" : owner.getLastName().strip());
 
         // find owners by last name
         Collection<Owner> results = this.clinicService.findOwnerByLastName(owner.getLastName());
